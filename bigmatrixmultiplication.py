@@ -7,9 +7,11 @@ overflowing the available RAM.
 
 import tensorflow as tf
 import os
+import time
 
-server_num = 4
-N = 100000 # dimension of the matrix
+
+worker_num = 4
+N = 10000 # dimension of the matrix
 d = 10 # number of splits along one dimension. Thus, we will have 100 blocks
 M = int(N / d)
 
@@ -30,14 +32,14 @@ def block_method():
         matrices = {}
         for i in range(0, d):
             for j in range(0, d):
-                with tf.device("/job:worker/task:%d" % ((i*(d-1)+j) % server_num)):
+                with tf.device("/job:worker/task:%d" % ((i*(d-1)+j) % worker_num)):
                     matrix_name = get_block_name(i, j)
                     matrices[matrix_name] = tf.random_uniform([M, M], name=matrix_name)
 
         intermediate_traces = {}
         for i in range(0, d):
             for j in range(0, d):
-                with tf.device("/job:worker/task:%d" % ((i*(d-1)+j) % server_num)):
+                with tf.device("/job:worker/task:%d" % ((i*(d-1)+j) % worker_num)):
                     A = matrices[get_block_name(i, j)]
                     B = matrices[get_block_name(j, i)]
                     intermediate_traces[get_intermediate_trace_name(i, j)] = tf.trace(tf.matmul(A, B))
@@ -59,12 +61,13 @@ def speedUp():
     with g.as_default():
         matrices = {}
         for r in range(row_number):
-            with tf.device("/job:worker/task:%d" % (r % server_num)):
+            with tf.device("/job:worker/task:%d" % (r % worker_num)):
                 row_name = get_row_name(r)
                 matrices[row_name] = tf.random_uniform([1, N], name=row_name)
 
+        intermediate_traces = {}
         for r in range(row_number):
-            with tf.device("/job:worker/task:%d" % (r % server_num)):
+            with tf.device("/job:worker/task:%d" % (r % worker_num)):
                 A = matrices[get_row_name(r)]
                 intermediate_traces[get_row_name(r)] = tf.matmul(A, tf.transpose(A))
 
@@ -77,4 +80,8 @@ def speedUp():
             sess.close()
             print result
 
+print('start time'),
+print(time.localtime(time.time()))
 speedUp()
+print('end time'),
+print(time.localtime(time.time()))
