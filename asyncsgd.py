@@ -1,11 +1,14 @@
 import tensorflow as tf
 import os
 
+tf.app.flags.DEFINE_integer("task_index", 0, "Index of the worker task")
+FLAGS = tf.app.flags.FLAGS
+
 worker_num = 5
 num_features = 33762578
-iterate_num = 10000
-test_num = 2000
-break_point = 1000
+iterate_num = 100
+test_num = 20
+break_point = 100
 g = tf.Graph()
 
 input_producers = [
@@ -18,38 +21,39 @@ input_producers = [
 ]
 
 with g.as_default():
+
+    # creating a model variable on task 0. This is a process running on node vm-48-1
     with tf.device("/job:worker/task:0"):
         w = tf.Variable(tf.zeros([num_features, 1]), name="model")
         mmm = tf.ones([num_features, 1])
 
-    for i in range(worker_num):
-        with tf.device("/job:worker/task:%d" % i):
-            gradients = []
-            filename_queue = tf.train.string_input_producer(input_producers[i], num_epochs=None)
-            reader = tf.TFRecordReader()
-            _, serialized_example = reader.read(filename_queue)
-            features = tf.parse_single_example(serialized_example,
-                                               features={'label': tf.FixedLenFeature([1], dtype=tf.int64),
-                                                         'index': tf.VarLenFeature(dtype=tf.int64),
-                                                         'value': tf.VarLenFeature(dtype=tf.float32)})
-            label = features['label']
-            index = features['index']
-            value = features['value']
-            dense_feature = tf.sparse_to_dense(tf.sparse_tensor_to_dense(index),
-                                               [num_features],
-                                               tf.sparse_tensor_to_dense(value))
-            y = tf.cast(label, tf.float32)[0]
-            x = tf.reshape(dense_feature, shape=[num_features, 1])
-            a = tf.transpose(w)
-            b = tf.matmul(a, x)
-            c = tf.mul(y, b)
-            d = tf.mul(y, c - 1)
-            local_gradient = tf.mul(d, x)
-            gradients.append(tf.mul(local_gradient, 0.01))
+    # creating only reader and gradient computation operator
+    # here, they emit predefined tensors. however, they can be defined as reader
+    # operators as done in "exampleReadCriteoData.py"
+    with tf.device("/job:worker/task:%d" % FLAGS.task_index):
+        filename_queue = tf.train.string_input_producer(input_producers[FLAGS.task_index], num_epochs=None)
+        reader = tf.TFRecordReader()
+        _, serialized_example = reader.read(filename_queue)
+        features = tf.parse_single_example(serialized_example,
+                                           features={'label': tf.FixedLenFeature([1], dtype=tf.int64),
+                                                     'index': tf.VarLenFeature(dtype=tf.int64),
+                                                     'value': tf.VarLenFeature(dtype=tf.float32)})
+        label = features['label']
+        index = features['index']
+        value = features['value']
+        dense_feature = tf.sparse_to_dense(tf.sparse_tensor_to_dense(index),
+                                           [num_features],
+                                           tf.sparse_tensor_to_dense(value))
+        y = tf.cast(label, tf.float32)[0]
+        x = tf.reshape(dense_feature, shape=[num_features, 1])
+        a = tf.transpose(w)
+        b = tf.matmul(a, x)
+        c = tf.mul(y, b)
+        d = tf.mul(y, c - 1)
+        local_gradient = tf.mul(d, x)
 
     with tf.device("/job:worker/task:0"):
-        aggregator = tf.add_n(gradients)
-        assign_op = w.assign_add(aggregator)
+        assign_op = w.assign_add(tf.mul(local_gradient, 0.001))
         w = assign_op
 
     with tf.device("/job:worker/task:0"):
@@ -68,25 +72,15 @@ with g.as_default():
                                            tf.sparse_tensor_to_dense(value))
         test_y = tf.cast(label, tf.float32)
         test_x = tf.reshape(dense_feature, shape=[num_features, 1])
-
-        # test_a = tf.scalar_mul(test_y, tf.matmul(tf.transpose(w), test_x))
-        # test_b = tf.sigmoid(test_a)
-        # test_c = tf.log(test_b)
-        # loss = tf.scalar_mul(-1, test_c)
-        # # norm = tf.matmul(tf.transpose(w), mmm)
-        # test_d = tf.exp(tf.scalar_mul(-1, test_a))
-        # one = tf.convert_to_tensor([[1.0]])
-        # test_e = tf.add(one, test_d)
-        # loss2 = tf.log(test_e)
-
         predict_confidence = tf.matmul(tf.transpose(w), test_x)
         predict_y = tf.sign(predict_confidence)[0]
         cnt = tf.equal(test_y, predict_y)
         norm = tf.matmul(tf.transpose(w), mmm)
 
-
-    with tf.Session("grpc://vm-22-1:2222") as sess:
-        sess.run(tf.initialize_all_variables())
+    with tf.Session("grpc://vm-22-%d:2222" % (FLAGS.task_index+1)) as sess:
+        # only one client initializes the variable
+        if FLAGS.task_index == 0:
+            sess.run(tf.initialize_all_variables())
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
         for i in range(iterate_num):
@@ -94,7 +88,7 @@ with g.as_default():
             output = sess.run(w)
             if (i+1) % break_point == 0:
                 current_error = 0
-                out = open('error_syn.csv', 'a')
+                out = open('error_asyn.csv', 'a')
                 for j in range(test_num):
                     output2 = sess.run([test_y, predict_y, cnt, norm])
                     is_right = output2[2][0]
@@ -107,4 +101,3 @@ with g.as_default():
 
                 print >> out, current_error
                 out.close()
-        sess.close()
