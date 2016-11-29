@@ -3,9 +3,9 @@ import os
 
 worker_num = 5
 num_features = 33762578
-iterate_num = 10000
-test_num = 2000
-break_point = 1000
+iterate_num = 3
+test_num = 50
+break_point = 3
 g = tf.Graph()
 
 input_producers = [
@@ -19,12 +19,13 @@ input_producers = [
 
 with g.as_default():
     with tf.device("/job:worker/task:0"):
-        w = tf.Variable(tf.zeros([num_features, 1]), name="model")
-        mmm = tf.ones([num_features, 1])
+        w = tf.Variable(tf.random_normal([num_features, 1]), name="model")
+        # mmm = tf.ones([num_features, 1])
 
-    for i in range(worker_num):
+    gradients = []
+    y_list = []
+    for i in range(1):
         with tf.device("/job:worker/task:%d" % i):
-            gradients = []
             filename_queue = tf.train.string_input_producer(input_producers[i], num_epochs=None)
             reader = tf.TFRecordReader()
             _, serialized_example = reader.read(filename_queue)
@@ -42,15 +43,15 @@ with g.as_default():
             x = tf.reshape(dense_feature, shape=[num_features, 1])
             a = tf.transpose(w)
             b = tf.matmul(a, x)
-            c = tf.mul(y, b)
+            c = tf.sigmoid(tf.mul(y, b))
             d = tf.mul(y, c - 1)
             local_gradient = tf.mul(d, x)
-            gradients.append(tf.mul(local_gradient, 0.01))
+            y_list.append(y)
+            gradients.append(tf.mul(local_gradient, 0.05))
 
     with tf.device("/job:worker/task:0"):
         aggregator = tf.add_n(gradients)
         assign_op = w.assign_add(aggregator)
-        w = assign_op
 
     with tf.device("/job:worker/task:0"):
         filename_queue = tf.train.string_input_producer(input_producers[5], num_epochs=None)
@@ -82,17 +83,17 @@ with g.as_default():
         predict_confidence = tf.matmul(tf.transpose(w), test_x)
         predict_y = tf.sign(predict_confidence)[0]
         cnt = tf.equal(test_y, predict_y)
-        norm = tf.matmul(tf.transpose(w), mmm)
+        norm = tf.matmul(tf.transpose(w), w)
 
 
     with tf.Session("grpc://vm-22-1:2222") as sess:
         sess.run(tf.initialize_all_variables())
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
-        for i in range(iterate_num):
+        for i in range(1, 1+iterate_num):
             print 'iteration {}/{}'.format(i, iterate_num)
-            output = sess.run(w)
-            if (i+1) % break_point == 0:
+            output = sess.run([assign_op])
+            if i % break_point == 0:
                 current_error = 0
                 out = open('error_syn.csv', 'a')
                 for j in range(test_num):
@@ -100,11 +101,11 @@ with g.as_default():
                     is_right = output2[2][0]
                     if not is_right:
                         current_error += 1
-                    print 'test_y:  ', output2[0],
-                    print '\tpredict_y:  ', output2[1],
-                    print '\t:', current_error,
-                    print '\t norm: ', output2[3]
-
-                print >> out, current_error
+                    # print 'test_y:  ', output2[0],
+                    # print '\tpredict_y:  ', output2[1],
+                    # print '\terror:  ', current_error,
+                    # print '\tnorm:  ', output2[3]
+                print 'error: ', current_error
+                #print >> out, current_error
                 out.close()
         sess.close()
