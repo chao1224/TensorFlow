@@ -28,6 +28,7 @@ with g.as_default():
     # creating a model variable on task 0. This is a process running on node vm-48-1
     with tf.device("/job:worker/task:0"):
         w = tf.Variable(tf.zeros([num_features]), name="model")
+        params = tf.Variable(tf.zeros([num_features]), name="model")
 
 
     # 1. update indice to parameter server
@@ -82,10 +83,10 @@ with g.as_default():
         # test_x = tf.reshape(dense_feature, shape=[num_features, 1])
         test_x = dense_feature
 
-        predict_confidence = tf.reduce_sum(tf.mul(w, test_x))
+        predict_confidence = tf.reduce_sum(tf.mul(params, test_x))
         predict_y = tf.sign(predict_confidence)
         cnt = tf.equal(test_y, predict_y)
-        norm = tf.reduce_sum(tf.mul(w, w))
+        norm = tf.reduce_sum(tf.mul(params, params))
 
     with tf.Session("grpc://vm-22-%d:2222" % (FLAGS.task_index+1)) as sess:
         # only one client initializes the variable
@@ -100,16 +101,17 @@ with g.as_default():
             if i % break_point == 0:
                 print 'reach break point'
                 current_error = 0
+                break_point_params = w.eval()
                 # out = open('error_asyn.csv', 'a')
                 for j in range(test_num):
-                    output2 = sess.run([test_y, predict_y, cnt, norm])
+                    output2 = sess.run([test_y, predict_y, cnt, norm], feed_dict={params: break_point_params})
                     is_right = output2[2][0]
                     if not is_right:
                         current_error += 1
                     # print 'test_y:  ', output2[0],
                     # print '\tpredict_y:  ', output2[1],
                     # print '\t:', current_error,
-                    # print '\t norm: ', output2[3]
+                    print '\t norm: ', output2[3]
                 # print >> out, current_error
                 print 'current error:  ', current_error
                 # out.close()
