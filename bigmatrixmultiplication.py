@@ -11,7 +11,7 @@ import time
 
 
 worker_num = 4
-N = 10000 # dimension of the matrix
+N = 100000 # dimension of the matrix
 d = 10 # number of splits along one dimension. Thus, we will have 100 blocks
 M = int(N / d)
 
@@ -82,6 +82,6 @@ def speedUp():
 
 print('start time'),
 print(time.localtime(time.time()))
-speedUp()
+block_method()
 print('end time'),
 print(time.localtime(time.time()))

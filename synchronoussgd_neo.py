@@ -100,6 +100,8 @@ with g.as_default():
             output = sess.run([assign_op, aggregator])
             print output[1].shape
             tf.Print(mark,[mark])
+            for x in index_list:
+                print x.eval()
             print index_list
 
             if i % break_point == 0:
