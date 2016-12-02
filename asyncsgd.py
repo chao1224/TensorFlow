@@ -9,7 +9,7 @@ num_features = 33762578
 
 iterate_num = 1000
 # number of test data in the test set
-test_num = 500
+test_num = 200
 # when to run the testing data
 break_point = 100
 g = tf.Graph()
@@ -63,8 +63,11 @@ with g.as_default():
         ggg = local_gradient
         w = tf.scatter_sub(w, index.values, local_gradient)
 
+    # 5. assign value for params
+    with tf.device("/job:worker/task:0"):
+        update_params = tf.assign(params, w)
 
-    # 5. calculate test error
+    # 6. calculate test error
     with tf.device("/job:worker/task:0"):
         filename_queue = tf.train.string_input_producer(input_producers[5], num_epochs=None)
         reader = tf.TFRecordReader()
@@ -79,8 +82,7 @@ with g.as_default():
         dense_feature = tf.sparse_to_dense(tf.sparse_tensor_to_dense(index),
                                            [num_features],
                                            tf.sparse_tensor_to_dense(value))
-        test_y = tf.cast(label, tf.float32)
-        # test_x = tf.reshape(dense_feature, shape=[num_features, 1])
+        test_y = tf.cast(label, tf.float32)[0]
         test_x = dense_feature
 
         predict_confidence = tf.reduce_sum(tf.mul(params, test_x))
@@ -100,18 +102,14 @@ with g.as_default():
 
             if i % break_point == 0:
                 print 'reach break point'
+                sess.run(update_params)
                 current_error = 0
                 break_point_params = w.eval()
                 # out = open('error_asyn.csv', 'a')
                 for j in range(test_num):
-                    output2 = sess.run([test_y, predict_y, cnt, norm], feed_dict={params: break_point_params})
-                    is_right = output2[2][0]
+                    output2 = sess.run([test_y, predict_y, cnt, norm])
+                    is_right = output2[2]
                     if not is_right:
                         current_error += 1
-                    # print 'test_y:  ', output2[0],
-                    # print '\tpredict_y:  ', output2[1],
-                    # print '\t:', current_error,
-                    print '\t norm: ', output2[3]
-                # print >> out, current_error
                 print 'current error:  ', current_error
                 # out.close()

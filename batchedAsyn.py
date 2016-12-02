@@ -9,7 +9,7 @@ num_features = 33762578
 
 iterate_num = 500
 # number of test data in the test set
-test_num = 100
+test_num = 500
 # when to run the testing data
 break_point = 50
 batch_size = 10
@@ -30,7 +30,7 @@ with g.as_default():
     # creating a model variable on task 0. This is a process running on node vm-48-1
     with tf.device("/job:worker/task:0"):
         w = tf.Variable(tf.zeros([num_features]), name="model")
-        params = tf.Variable(tf.zeros([num_features]), name="model")
+        params = tf.Variable(tf.zeros([num_features]))
 
     def read_my_file_format(filename_queue):
         reader = tf.TFRecordReader()
@@ -75,35 +75,33 @@ with g.as_default():
         ggg = local_gradient
         w = tf.scatter_sub(w, index.values, local_gradient)
 
-
-    # 5. calculate test error
+    # 5. assign value for params
     with tf.device("/job:worker/task:0"):
-        cnt_list = []
-        norm_list = []
-        for _ in range(test_num):
-            filename_queue = tf.train.string_input_producer(input_producers[5], num_epochs=None)
-            reader = tf.TFRecordReader()
-            _, serialized_example = reader.read(filename_queue)
-            features = tf.parse_single_example(serialized_example,
-                                               features={'label': tf.FixedLenFeature([1], dtype=tf.int64),
-                                                         'index': tf.VarLenFeature(dtype=tf.int64),
-                                                         'value': tf.VarLenFeature(dtype=tf.float32)})
-            label = features['label']
-            index = features['index']
-            value = features['value']
-            dense_feature = tf.sparse_to_dense(tf.sparse_tensor_to_dense(index),
-                                               [num_features],
-                                               tf.sparse_tensor_to_dense(value))
-            test_y = tf.cast(label, tf.float32)
-            # test_x = tf.reshape(dense_feature, shape=[num_features, 1])
-            test_x = dense_feature
+        update_params = tf.assign(params, w)
 
-            predict_confidence = tf.reduce_sum(tf.mul(params, test_x))
-            predict_y = tf.sign(predict_confidence)
-            cnt = tf.equal(test_y, predict_y)
-            cnt_list.append(cnt)
-            norm = tf.reduce_sum(tf.mul(params, params))
-            norm_list.append(norm)
+    # 6. calculate test error
+    with tf.device("/job:worker/task:0"):
+        filename_queue = tf.train.string_input_producer(input_producers[5], num_epochs=None)
+        reader = tf.TFRecordReader()
+        _, serialized_example = reader.read(filename_queue)
+        features = tf.parse_single_example(serialized_example,
+                                           features={'label': tf.FixedLenFeature([1], dtype=tf.int64),
+                                                     'index': tf.VarLenFeature(dtype=tf.int64),
+                                                     'value': tf.VarLenFeature(dtype=tf.float32)})
+        label = features['label']
+        index = features['index']
+        value = features['value']
+        dense_feature = tf.sparse_to_dense(tf.sparse_tensor_to_dense(index),
+                                           [num_features],
+                                           tf.sparse_tensor_to_dense(value))
+        test_y = tf.cast(label, tf.float32)[0]
+        test_x = dense_feature
+
+        predict_confidence = tf.reduce_sum(tf.mul(params, test_x))
+        predict_y = tf.sign(predict_confidence)
+        cnt = tf.equal(test_y, predict_y)
+        norm = tf.reduce_sum(tf.mul(params, params))
+
 
     with tf.Session("grpc://vm-22-%d:2222" % (FLAGS.task_index+1)) as sess:
         # only one client initializes the variable
@@ -113,21 +111,22 @@ with g.as_default():
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
         for i in range(1, 1+iterate_num):
             print 'iteration {}/{}'.format(i, iterate_num)
-            output = sess.run(ggg)
+            output = sess.run([ggg])
 
             if i % break_point == 0:
                 print 'reach break point'
+                sess.run(update_params)
                 current_error = 0
                 break_point_params = w.eval()
                 # out = open('error_asyn.csv', 'a')
-                output2 = sess.run([cnt_list, norm_list], feed_dict={params: break_point_params})
-                predicts = output2[0]
-                print len(predicts)
-                print predicts
-                for x in predicts:
-                    if not x[0]:
+                for j in range(test_num):
+                    output2 = sess.run([test_y, predict_y, cnt, norm])
+                    is_right = output2[2]
+                    if not is_right:
                         current_error += 1
-                    print x,
-                print
+                    print 'actual: ', output2[0],
+                    print '\tpredict: ', output2[1],
+                    print '\tmatch: ', is_right,
+                    print '\tnorm: ', output2[3]
                 print 'current error:  ', current_error
                 # out.close()
