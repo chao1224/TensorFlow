@@ -1,13 +1,17 @@
 import tensorflow as tf
 import os
+import datetime
 
 worker_num = 5
 num_features = 33762578
-iterate_num = 500
-test_num = 1000
-break_point = 50
-
 batch_size = 100
+
+# iteration num, should be 2e7
+iterate_num = int(1e6 / batch_size)
+# test num is test size, should be 1e4
+test_num = int(2e3)
+# break point is how often we run a test, should be 1e5
+break_point = int(1e4 / batch_size)
 
 g = tf.Graph()
 
@@ -95,6 +99,7 @@ with g.as_default():
         w = tf.scatter_sub(w, index_list[3].values, gradients[3])
         w = tf.scatter_sub(w, index_list[4].values, gradients[4])
 
+    # 5. get test error
     with tf.device("/job:worker/task:0"):
         filename_queue = tf.train.string_input_producer(input_producers[5], num_epochs=None)
         reader = tf.TFRecordReader()
@@ -118,24 +123,23 @@ with g.as_default():
         norm = tf.reduce_sum(tf.mul(w, w))
 
     with tf.Session("grpc://vm-22-1:2222") as sess:
+        print datetime.datetime.now()
         sess.run(tf.initialize_all_variables())
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
         for i in range(1, 1+iterate_num):
-
-            print 'iteration {}/{}'.format(i, iterate_num)
-            if i % 20 == 0:
+            if i % 1000 == 0:
                 print 'iteration {}/{}'.format(i, iterate_num)
             output = sess.run([aaa, bbb, ccc])
-
             if i % break_point == 0:
                 current_error = 0
-                out = open('error_syn.csv', 'a')
+                out = open('error_batched_syn.csv', 'a')
                 for _ in range(test_num):
                     output2 = sess.run([test_y, predict_y, cnt, norm])
                     is_right = output2[2][0]
                     if not is_right:
                         current_error += 1
-                print 'error: ', current_error
+                print >> out, current_error
                 out.close()
+        print datetime.datetime.now()
         sess.close()

@@ -1,18 +1,20 @@
 import tensorflow as tf
 import os
+import datetime
 
 tf.app.flags.DEFINE_integer("task_index", 0, "Index of the worker task")
 FLAGS = tf.app.flags.FLAGS
 
 worker_num = 5
 num_features = 33762578
+batch_size = 100
 
-iterate_num = 500
-# number of test data in the test set
-test_num = 500
-# when to run the testing data
-break_point = 50
-batch_size = 10
+# iteration num, should be 2e7
+iterate_num = int(1e6 / batch_size)
+# test num is test size, should be 1e4
+test_num = int(2e3)
+# break point is how often we run a test, should be 1e5
+break_point = int(1e4 / batch_size)
 
 g = tf.Graph()
 
@@ -104,13 +106,12 @@ with g.as_default():
 
 
     with tf.Session("grpc://vm-22-%d:2222" % (FLAGS.task_index+1)) as sess:
-        # only one client initializes the variable
+        print datetime.datetime.now()
         if FLAGS.task_index == 0:
             sess.run(tf.initialize_all_variables())
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
         for i in range(1, 1+iterate_num):
-            print 'iteration {}/{}'.format(i, iterate_num)
             output = sess.run([ggg])
 
             if i % break_point == 0:
@@ -118,15 +119,13 @@ with g.as_default():
                 sess.run(update_params)
                 current_error = 0
                 break_point_params = w.eval()
-                # out = open('error_asyn.csv', 'a')
+                out = open('error_batched_asyn.csv', 'a')
                 for j in range(test_num):
                     output2 = sess.run([test_y, predict_y, cnt, norm])
                     is_right = output2[2]
                     if not is_right:
                         current_error += 1
-                    print 'actual: ', output2[0],
-                    print '\tpredict: ', output2[1],
-                    print '\tmatch: ', is_right,
-                    print '\tnorm: ', output2[3]
                 print 'current error:  ', current_error
-                # out.close()
+                out.close()
+        print datetime.datetime.now()
+        sess.close()
