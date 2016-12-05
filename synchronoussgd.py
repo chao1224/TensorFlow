@@ -12,6 +12,7 @@ test_num = int(2e3)
 break_point = int(1e4)
 g = tf.Graph()
 
+
 input_producers = [
     ["./data/tfrecords00", "./data/tfrecords01", "./data/tfrecords02", "./data/tfrecords03", "./data/tfrecords04"],
     ["./data/tfrecords05", "./data/tfrecords06", "./data/tfrecords07", "./data/tfrecords08", "./data/tfrecords09"],
@@ -91,6 +92,7 @@ with g.as_default():
         w = tf.scatter_sub(w, index_list[3].values, gradients[3])
         w = tf.scatter_sub(w, index_list[4].values, gradients[4])
 
+    # 5. calculate test error
     with tf.device("/job:worker/task:0"):
         filename_queue = tf.train.string_input_producer(input_producers[5], num_epochs=None)
         reader = tf.TFRecordReader()
@@ -102,16 +104,15 @@ with g.as_default():
         label = features['label']
         index = features['index']
         value = features['value']
-        dense_feature = tf.sparse_to_dense(tf.sparse_tensor_to_dense(index),
-                                           [num_features],
-                                           tf.sparse_tensor_to_dense(value))
-        test_y = tf.cast(label, tf.float32)
-        test_x = dense_feature
 
-        predict_confidence = tf.reduce_sum(tf.mul(w, test_x))
+        sparse_params = tf.gather(w, index.values)
+        test_x = value.values
+        test_y = tf.cast(label, tf.float32)[0]
+
+        predict_confidence = tf.reduce_sum(tf.mul(sparse_params, test_x))
         predict_y = tf.sign(predict_confidence)
         cnt = tf.equal(test_y, predict_y)
-        norm = tf.reduce_sum(tf.mul(w, w))
+        norm = tf.reduce_sum(tf.mul(sparse_params, sparse_params))
 
     with tf.Session("grpc://vm-22-1:2222") as sess:
         print datetime.datetime.now()
@@ -127,7 +128,7 @@ with g.as_default():
                 out = open('error_syn.csv', 'a')
                 for _ in range(test_num):
                     output2 = sess.run([test_y, predict_y, cnt, norm])
-                    is_right = output2[2][0]
+                    is_right = output2[2]
                     if not is_right:
                         current_error += 1
                 print >> out, current_error

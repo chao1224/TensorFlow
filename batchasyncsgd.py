@@ -24,7 +24,7 @@ input_producers = [
     ["./data/tfrecords10", "./data/tfrecords11", "./data/tfrecords12", "./data/tfrecords13", "./data/tfrecords14"],
     ["./data/tfrecords15", "./data/tfrecords16", "./data/tfrecords17", "./data/tfrecords18", "./data/tfrecords19"],
     ["./data/tfrecords20", "./data/tfrecords21"],
-    ["./data/tfrecords22"]
+    ["./data/tfrecords23"]
 ]
 
 with g.as_default():
@@ -93,16 +93,15 @@ with g.as_default():
         label = features['label']
         index = features['index']
         value = features['value']
-        dense_feature = tf.sparse_to_dense(tf.sparse_tensor_to_dense(index),
-                                           [num_features],
-                                           tf.sparse_tensor_to_dense(value))
-        test_y = tf.cast(label, tf.float32)[0]
-        test_x = dense_feature
 
-        predict_confidence = tf.reduce_sum(tf.mul(params, test_x))
+        sparse_params = tf.gather(params, index.values)
+        test_x = value.values
+        test_y = tf.cast(label, tf.float32)[0]
+
+        predict_confidence = tf.reduce_sum(tf.mul(sparse_params, test_x))
         predict_y = tf.sign(predict_confidence)
         cnt = tf.equal(test_y, predict_y)
-        norm = tf.reduce_sum(tf.mul(params, params))
+        norm = tf.reduce_sum(tf.mul(sparse_params, sparse_params))
 
 
     with tf.Session("grpc://vm-22-%d:2222" % (FLAGS.task_index+1)) as sess:

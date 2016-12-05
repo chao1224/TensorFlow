@@ -21,7 +21,7 @@ input_producers = [
     ["./data/tfrecords10", "./data/tfrecords11", "./data/tfrecords12", "./data/tfrecords13", "./data/tfrecords14"],
     ["./data/tfrecords15", "./data/tfrecords16", "./data/tfrecords17", "./data/tfrecords18", "./data/tfrecords19"],
     ["./data/tfrecords20", "./data/tfrecords21"],
-    ["./data/tfrecords22"]
+    ["./data/tfrecords23"]
 ]
 
 with g.as_default():
@@ -90,9 +90,6 @@ with g.as_default():
         bbb = index_list
         ccc = ooo
 
-        print 'gradient  ', gradients[0]
-        print 'index   ', index_list[0].values
-
         w = tf.scatter_sub(w, index_list[0].values, gradients[0])
         w = tf.scatter_sub(w, index_list[1].values, gradients[1])
         w = tf.scatter_sub(w, index_list[2].values, gradients[2])
@@ -111,16 +108,15 @@ with g.as_default():
         label = features['label']
         index = features['index']
         value = features['value']
-        dense_feature = tf.sparse_to_dense(tf.sparse_tensor_to_dense(index),
-                                           [num_features],
-                                           tf.sparse_tensor_to_dense(value))
-        test_y = tf.cast(label, tf.float32)
-        test_x = dense_feature
 
-        predict_confidence = tf.reduce_sum(tf.mul(w, test_x))
+        sparse_params = tf.gather(w, index.values)
+        test_x = value.values
+        test_y = tf.cast(label, tf.float32)[0]
+
+        predict_confidence = tf.reduce_sum(tf.mul(sparse_params, test_x))
         predict_y = tf.sign(predict_confidence)
         cnt = tf.equal(test_y, predict_y)
-        norm = tf.reduce_sum(tf.mul(w, w))
+        norm = tf.reduce_sum(tf.mul(sparse_params, sparse_params))
 
     with tf.Session("grpc://vm-22-1:2222") as sess:
         print datetime.datetime.now()
@@ -136,7 +132,7 @@ with g.as_default():
                 out = open('error_batched_syn.csv', 'a')
                 for _ in range(test_num):
                     output2 = sess.run([test_y, predict_y, cnt, norm])
-                    is_right = output2[2][0]
+                    is_right = output2[2]
                     if not is_right:
                         current_error += 1
                 print >> out, current_error

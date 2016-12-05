@@ -1,0 +1,30 @@
+README:
+
+big matrix multiplication:
+Simply apply the block matrix idea.
+1. First split the whole matrix into d*d submatrices.
+2. Then implement the formula of how to calculate the trace of a matrix with decomposition into submatrices, and split the operations on all submatrices to each worker.
+3. Add all numbers to get final result.
+run:
+python bigmatrixmultiplication.py
+
+syn & asyn:
+In the synchronous mode, in training phrase, we split that into four steps:
+1. For all data sample on each worker, get its sparse indices, and then update the indice of this work set to parameter set.
+2. Parameter set gets the sparse values corresponding to indices.
+3. Each worker gets the spares parameter vector of LR model, then calculate local graident, which is also sparse.
+4. Parameter server gets all the gradients from each worker, and update
+For asynch, we should pay attention to several points:
+1. Different from sync mode, the weight vector we are now using should be updated after each iteration, and to keet track of this iteration number in async mode, we need to specify a new tensor variable to record it.
+2. When testing errors, the weight vector should be fixed. And the method is we assign this weight vector to a new parameter vector only before it starts to apply to testing data.
+run:
+python synchronoussgd.py
+sh launch_asyncsgd.sh
+
+batch reading:
+Pretty much the same as before, just need to make some small modifications.
+1. Because we need to use sparse representation combined with batch reading, we should use parse_example after batching, instead of using parse_single_exmample as above.
+2. In sparse, the indices we want to transform between parameter server and each worker should be all the sparse indices of this batch. We can easily implement this with weight = tf.gather(w, index.values)
+run:
+python batchsynchronoussgd.py
+sh launch_batchasyncsgd.sh
