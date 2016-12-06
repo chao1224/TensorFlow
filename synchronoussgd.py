@@ -7,11 +7,10 @@ num_features = 33762578
 # iteration num, should be 2e7
 iterate_num = int(1e6)
 # test num is test size, should be 1e4
-test_num = int(2e3)
+test_num = int(1e4)
 # break point is how often we run a test, should be 1e5
-break_point = int(1e4)
+break_point = int(2e4)
 g = tf.Graph()
-
 
 input_producers = [
     ["./data/tfrecords00", "./data/tfrecords01", "./data/tfrecords02", "./data/tfrecords03", "./data/tfrecords04"],
@@ -65,11 +64,6 @@ with g.as_default():
             x = value.values
             a = tf.mul(weight, x)
 
-            if i == 0:
-                print 'weight   ', weight
-                print 'x  ', x
-                print 'a ', a
-
             b = tf.reduce_sum(a)
             c = tf.sigmoid(tf.mul(y, b))
             d = tf.mul(y, c-1)
@@ -82,9 +76,6 @@ with g.as_default():
         aaa = gradients
         bbb = index_list
         ccc = ooo
-
-        print 'gradient  ', gradients[0]
-        print 'index   ', index_list[0].values
 
         w = tf.scatter_sub(w, index_list[0].values, gradients[0])
         w = tf.scatter_sub(w, index_list[1].values, gradients[1])

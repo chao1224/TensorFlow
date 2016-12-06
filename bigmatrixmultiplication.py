@@ -8,9 +8,10 @@ overflowing the available RAM.
 import tensorflow as tf
 import os
 import time
+import sys
 
 
-worker_num = 4
+worker_num = 5
 N = 100000 # dimension of the matrix
 d = 10 # number of splits along one dimension. Thus, we will have 100 blocks
 M = int(N / d)
@@ -80,8 +81,20 @@ def speedUp():
             sess.close()
             print result
 
+
+before_time = time.time()
 print('start time'),
-print(time.localtime(time.time()))
-block_method()
+print(time.asctime( time.localtime(time.time())))
+
+action = sys.argv[1]
+if action=='1':
+    block_method()
+elif action == '2':
+    speedUp()
+
+after_time = time.time()
 print('end time'),
-print(time.localtime(time.time()))
+print(time.asctime( time.localtime(time.time())))
+
+print('Duration: '),
+print(after_time - before_time)

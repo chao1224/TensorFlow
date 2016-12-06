@@ -17,6 +17,8 @@ In the synchronous mode, in training phrase, we split that into four steps:
 For asynch, we should pay attention to several points:
 1. Different from sync mode, the weight vector we are now using should be updated after each iteration, and to keet track of this iteration number in async mode, we need to specify a new tensor variable to record it.
 2. When testing errors, the weight vector should be fixed. And the method is we assign this weight vector to a new parameter vector only before it starts to apply to testing data.
+Testing data:
+To speed up the predictions on testing data, we also apply this sparsity property. That is to say, we first get model weight vector, and for each data point, get the sparse index, and therefore we only need to make predictions with such sparse weight and sparse test data point.
 run:
 python synchronoussgd.py
 sh launch_asyncsgd.sh
@@ -25,6 +27,7 @@ batch reading:
 Pretty much the same as before, just need to make some small modifications.
 1. Because we need to use sparse representation combined with batch reading, we should use parse_example after batching, instead of using parse_single_exmample as above.
 2. In sparse, the indices we want to transform between parameter server and each worker should be all the sparse indices of this batch. We can easily implement this with weight = tf.gather(w, index.values)
+3. The batch size is defined by the batch_size variable in code, need to change it manually.
 run:
 python batchsynchronoussgd.py
 sh launch_batchasyncsgd.sh

@@ -12,9 +12,10 @@ batch_size = 100
 # iteration num, should be 2e7
 iterate_num = int(1e6 / batch_size)
 # test num is test size, should be 1e4
-test_num = int(2e3)
+test_num = int(1e4)
 # break point is how often we run a test, should be 1e5
-break_point = int(1e4 / batch_size)
+break_point = int(2e4 / batch_size)
+
 
 g = tf.Graph()
 
@@ -70,7 +71,7 @@ with g.as_default():
         b = tf.reduce_sum(a)
         c = tf.sigmoid(tf.mul(y, b))
         d = tf.mul(y, c-1)
-        local_gradient = tf.mul(d, x)
+        local_gradient = tf.mul(tf.mul(d, x), 0.1)
 
     # 4. update gradients
     with tf.device("/job:worker/task:0"):
