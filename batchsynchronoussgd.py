@@ -7,7 +7,7 @@ num_features = 33762578
 batch_size = 100
 
 # iteration num, should be 2e7
-iterate_num = int(1e6 / batch_size)
+iterate_num = int(2e4 / batch_size)
 # test num is test size, should be 1e4
 test_num = int(1e4)
 # break point is how often we run a test, should be 1e5
@@ -124,8 +124,7 @@ with g.as_default():
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
         for i in range(1, 1+iterate_num):
-            if i % 1000 == 0:
-                print 'iteration {}/{}'.format(i, iterate_num)
+            print 'iteration {}/{}'.format(i, iterate_num)
             output = sess.run([aaa, bbb, ccc])
             if i % break_point == 0:
                 current_error = 0

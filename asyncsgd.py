@@ -1,7 +1,6 @@
 import tensorflow as tf
 import os
 import datetime
-import threading
 
 tf.app.flags.DEFINE_integer("task_index", 0, "Index of the worker task")
 FLAGS = tf.app.flags.FLAGS
@@ -10,11 +9,11 @@ worker_num = 5
 num_features = 33762578
 
 # iteration num, should be 2e7
-iterate_num = int(1e6)
+iterate_num = int(4e3)
 # test num is test size, should be 1e4
 test_num = int(1e4)
 # break point is how often we run a test, should be 1e5
-break_point = int(2e4)
+break_point = int(2e3)
 
 g = tf.Graph()
 
@@ -62,7 +61,7 @@ with g.as_default():
         b = tf.reduce_sum(a)
         c = tf.sigmoid(tf.mul(y, b))
         d = tf.mul(y, c-1)
-        local_gradient = tf.mul(tf.mul(d, x), 0.1)
+        local_gradient = tf.mul(tf.mul(d, x), 0.01)
 
     # 4. update gradients
     with tf.device("/job:worker/task:0"):
@@ -107,7 +106,7 @@ with g.as_default():
             iteration_n = iteration_count.eval()
             if iteration_n % 500 == 0:
                 print 'iteration {}/{}'.format(iteration_n, iterate_num)
-            if iteration_n % (5*break_point) == 0:
+            if iteration_n % break_point == 0:
                 sess.run(update_params)
                 current_error = 0
                 break_point_params = w.eval()

@@ -54,47 +54,16 @@ def block_method():
             sess.close()
             print result
 
-def speedUp():
-    g = tf.Graph()
-
-    row_number = N
-
-    with g.as_default():
-        matrices = {}
-        for r in range(row_number):
-            with tf.device("/job:worker/task:%d" % (r % worker_num)):
-                row_name = get_row_name(r)
-                matrices[row_name] = tf.random_uniform([1, N], name=row_name)
-
-        intermediate_traces = {}
-        for r in range(row_number):
-            with tf.device("/job:worker/task:%d" % (r % worker_num)):
-                A = matrices[get_row_name(r)]
-                intermediate_traces[get_row_name(r)] = tf.matmul(A, tf.transpose(A))
-
-        with tf.device("/job:worker/task:0"):
-            retval = tf.add_n(intermediate_traces.values())
-
-        config = tf.ConfigProto(log_device_placement=True)
-        with tf.Session("grpc://vm-22-2:2222", config=config) as sess:
-            result = sess.run(retval)
-            sess.close()
-            print result
-
 
 before_time = time.time()
 print('start time'),
-print(time.asctime( time.localtime(time.time())))
+print(time.asctime(time.localtime(time.time())))
 
-action = sys.argv[1]
-if action=='1':
-    block_method()
-elif action == '2':
-    speedUp()
+block_method()
 
 after_time = time.time()
 print('end time'),
-print(time.asctime( time.localtime(time.time())))
+print(time.asctime(time.localtime(time.time())))
 
 print('Duration: '),
 print(after_time - before_time)

@@ -5,11 +5,12 @@ import datetime
 worker_num = 5
 num_features = 33762578
 # iteration num, should be 2e7
-iterate_num = int(1e6)
+iterate_num = int(2e4)
 # test num is test size, should be 1e4
 test_num = int(1e4)
 # break point is how often we run a test, should be 1e5
-break_point = int(2e4)
+break_point = int(2e3)
+
 g = tf.Graph()
 
 input_producers = [
@@ -69,7 +70,7 @@ with g.as_default():
             d = tf.mul(y, c-1)
             ooo.append(d)
             local_gradient = tf.mul(d, x)
-            gradients[i] = tf.mul(local_gradient, 0.1)
+            gradients[i] = tf.mul(local_gradient, 0.01)
 
     # 4. update gradients
     with tf.device("/job:worker/task:0"):
